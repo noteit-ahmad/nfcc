@@ -1,0 +1,1418 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>NFC JO — Connected Cards</title>
+
+    <!-- ===== FONTS ===== -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;600;700;800;900&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+
+    <!-- ===== FRAMER MOTION + REACT via importmap ===== -->
+    <script type="importmap">
+        {
+            "imports": {
+                "react": "https://esm.sh/react@18.2.0",
+                "react-dom/client": "https://esm.sh/react-dom/client@18.2.0",
+                "framer-motion": "https://esm.sh/framer-motion@10.16.4"
+            }
+        }
+    </script>
+
+    <style>
+        /* ===== RESET & BASE ===== */
+        *,
+        *::before,
+        *::after {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        html {
+            scroll-behavior: smooth;
+        }
+
+        body {
+            background: #05070a;
+            color: #eef2f6;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            overflow-x: hidden;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        /* ===== SCROLLBAR ===== */
+        ::-webkit-scrollbar {
+            width: 4px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #0b0f14;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #00f0ff;
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #7b2ffc;
+        }
+
+        /* ===== UTILITY ===== */
+        .font-heading {
+            font-family: 'Orbitron', monospace;
+        }
+
+        /* ===== SCROLL-PROGRESS BAR (top) ===== */
+        #scroll-progress-bar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            height: 2px;
+            background: linear-gradient(90deg, #00f0ff, #7b2ffc);
+            z-index: 9999;
+            width: 0%;
+            transition: width 0.08s ease-out;
+            box-shadow: 0 0 12px rgba(0, 240, 255, 0.35);
+        }
+
+        /* ===== HUD OVERLAY (fixed) ===== */
+        #hud-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            pointer-events: none;
+            z-index: 50;
+            opacity: 0;
+            transition: opacity 0.8s ease;
+        }
+        #hud-overlay.visible {
+            opacity: 1;
+        }
+
+        /* HUD – corner brackets */
+        .hud-corner {
+            position: absolute;
+            width: 32px;
+            height: 32px;
+            border-color: rgba(0, 240, 255, 0.25);
+            border-style: solid;
+            border-width: 0;
+            transition: border-color 0.4s;
+        }
+        .hud-corner.tl {
+            top: 20px;
+            left: 24px;
+            border-top-width: 1.5px;
+            border-left-width: 1.5px;
+        }
+        .hud-corner.tr {
+            top: 20px;
+            right: 24px;
+            border-top-width: 1.5px;
+            border-right-width: 1.5px;
+        }
+        .hud-corner.bl {
+            bottom: 20px;
+            left: 24px;
+            border-bottom-width: 1.5px;
+            border-left-width: 1.5px;
+        }
+        .hud-corner.br {
+            bottom: 20px;
+            right: 24px;
+            border-bottom-width: 1.5px;
+            border-right-width: 1.5px;
+        }
+
+        /* HUD – thin frame */
+        .hud-frame {
+            position: absolute;
+            top: 12px;
+            left: 16px;
+            right: 16px;
+            bottom: 12px;
+            border: 1px solid rgba(0, 240, 255, 0.08);
+            border-radius: 4px;
+            pointer-events: none;
+        }
+
+        /* HUD – scanline */
+        .hud-scanline {
+            position: absolute;
+            left: 0;
+            width: 100%;
+            height: 1px;
+            background: linear-gradient(90deg, transparent, rgba(0, 240, 255, 0.12), rgba(123, 47, 252, 0.12), transparent);
+            box-shadow: 0 0 20px rgba(0, 240, 255, 0.06);
+            animation: scanMove 8s linear infinite;
+            pointer-events: none;
+        }
+        @keyframes scanMove {
+            0% {
+                top: 5%;
+                opacity: 0.3;
+            }
+            50% {
+                top: 95%;
+                opacity: 0.8;
+            }
+            100% {
+                top: 5%;
+                opacity: 0.3;
+            }
+        }
+
+        /* HUD – labels */
+        .hud-label {
+            position: absolute;
+            font-family: 'Orbitron', monospace;
+            font-size: 10px;
+            letter-spacing: 0.15em;
+            text-transform: uppercase;
+            color: rgba(0, 240, 255, 0.35);
+            background: rgba(5, 7, 10, 0.4);
+            backdrop-filter: blur(2px);
+            padding: 3px 10px;
+            border-radius: 2px;
+            border: 1px solid rgba(0, 240, 255, 0.06);
+            pointer-events: none;
+        }
+        .hud-label .hl-accent {
+            color: rgba(123, 47, 252, 0.6);
+        }
+        .hud-label .hl-value {
+            color: rgba(0, 240, 255, 0.55);
+        }
+
+        .hud-label.brand {
+            bottom: 28px;
+            left: 48px;
+            font-size: 11px;
+            letter-spacing: 0.25em;
+        }
+        .hud-label.status {
+            bottom: 28px;
+            right: 48px;
+            font-size: 10px;
+        }
+        .hud-label.progress {
+            bottom: 60px;
+            right: 48px;
+            font-size: 10px;
+            min-width: 60px;
+            text-align: center;
+        }
+
+        /* ===== RESPONSIVE HUD ===== */
+        @media (max-width: 768px) {
+            .hud-corner {
+                width: 20px;
+                height: 20px;
+            }
+            .hud-corner.tl {
+                top: 12px;
+                left: 14px;
+            }
+            .hud-corner.tr {
+                top: 12px;
+                right: 14px;
+            }
+            .hud-corner.bl {
+                bottom: 12px;
+                left: 14px;
+            }
+            .hud-corner.br {
+                bottom: 12px;
+                right: 14px;
+            }
+            .hud-frame {
+                top: 6px;
+                left: 8px;
+                right: 8px;
+                bottom: 6px;
+            }
+            .hud-label {
+                font-size: 8px !important;
+                padding: 2px 6px;
+            }
+            .hud-label.brand {
+                bottom: 18px;
+                left: 28px;
+                font-size: 9px !important;
+            }
+            .hud-label.status {
+                bottom: 18px;
+                right: 28px;
+                font-size: 8px !important;
+            }
+            .hud-label.progress {
+                bottom: 44px;
+                right: 28px;
+                font-size: 8px !important;
+                min-width: 40px;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .hud-corner {
+                width: 14px;
+                height: 14px;
+            }
+            .hud-corner.tl {
+                top: 8px;
+                left: 10px;
+            }
+            .hud-corner.tr {
+                top: 8px;
+                right: 10px;
+            }
+            .hud-corner.bl {
+                bottom: 8px;
+                left: 10px;
+            }
+            .hud-corner.br {
+                bottom: 8px;
+                right: 10px;
+            }
+            .hud-frame {
+                top: 4px;
+                left: 4px;
+                right: 4px;
+                bottom: 4px;
+            }
+            .hud-label.brand {
+                bottom: 14px;
+                left: 18px;
+                font-size: 7px !important;
+                padding: 1px 5px;
+            }
+            .hud-label.status {
+                bottom: 14px;
+                right: 18px;
+                font-size: 7px !important;
+                padding: 1px 5px;
+            }
+            .hud-label.progress {
+                bottom: 34px;
+                right: 18px;
+                font-size: 7px !important;
+                min-width: 30px;
+                padding: 1px 5px;
+            }
+        }
+
+        /* ===== SCROLL CUE ===== */
+        #scroll-cue {
+            position: fixed;
+            bottom: 40px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 40;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 6px;
+            opacity: 1;
+            transition: opacity 0.8s ease;
+            pointer-events: none;
+            font-family: 'Orbitron', monospace;
+            font-size: 9px;
+            letter-spacing: 0.2em;
+            text-transform: uppercase;
+            color: rgba(0, 240, 255, 0.3);
+        }
+        #scroll-cue.hidden {
+            opacity: 0;
+        }
+        .scroll-cue-line {
+            width: 1px;
+            height: 32px;
+            background: linear-gradient(180deg, rgba(0, 240, 255, 0.25), transparent);
+            animation: cuePulse 2s ease-in-out infinite;
+        }
+        @keyframes cuePulse {
+            0%,
+            100% {
+                opacity: 0.2;
+                transform: scaleY(0.6);
+            }
+            50% {
+                opacity: 0.8;
+                transform: scaleY(1);
+            }
+        }
+
+        /* ===== LOADING SHIMMER (optional) ===== */
+        #app-loader {
+            position: fixed;
+            inset: 0;
+            z-index: 99999;
+            background: #05070a;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: opacity 0.8s ease;
+        }
+        #app-loader.hidden {
+            opacity: 0;
+            pointer-events: none;
+        }
+        .loader-text {
+            font-family: 'Orbitron', monospace;
+            font-size: 14px;
+            letter-spacing: 0.3em;
+            color: rgba(0, 240, 255, 0.15);
+            animation: loadPulse 1.6s ease-in-out infinite;
+        }
+        @keyframes loadPulse {
+            0%,
+            100% {
+                opacity: 0.15;
+            }
+            50% {
+                opacity: 0.6;
+            }
+        }
+
+        /* ===== RESPONSIVE VIDEO FALLBACK ===== */
+        .video-fallback {
+            position: absolute;
+            inset: 0;
+            background: radial-gradient(ellipse at center, #0b1620 0%, #05070a 100%);
+            z-index: 1;
+        }
+        .video-fallback .dot-grid {
+            position: absolute;
+            inset: 0;
+            background-image: radial-gradient(rgba(0, 240, 255, 0.03) 1px, transparent 1px);
+            background-size: 40px 40px;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- ===== LOADER ===== -->
+    <div id="app-loader">
+        <span class="loader-text">NFC//JO</span>
+    </div>
+
+    <!-- ===== SCROLL PROGRESS BAR ===== -->
+    <div id="scroll-progress-bar"></div>
+
+    <!-- ===== HUD OVERLAY ===== -->
+    <div id="hud-overlay">
+        <div class="hud-frame"></div>
+        <div class="hud-corner tl"></div>
+        <div class="hud-corner tr"></div>
+        <div class="hud-corner bl"></div>
+        <div class="hud-corner br"></div>
+        <div class="hud-scanline"></div>
+        <div class="hud-label brand">NFC<span class="hl-accent">//</span>JO</div>
+        <div class="hud-label status">STATUS <span class="hl-value">● ACTIVE</span></div>
+        <div class="hud-label progress" id="hud-progress">00%</div>
+    </div>
+
+    <!-- ===== SCROLL CUE ===== -->
+    <div id="scroll-cue">
+        <span>scroll to explore</span>
+        <div class="scroll-cue-line"></div>
+    </div>
+
+    <!-- ===== REACT ROOT ===== -->
+    <div id="root"></div>
+
+    <!-- ===== MAIN SCRIPT ===== -->
+    <script type="module">
+        // ============================================================
+        //  IMPORTS
+        // ============================================================
+        import React, {
+            useRef,
+            useEffect,
+            useState,
+            useCallback,
+            useMemo
+        } from 'react';
+        import { createRoot } from 'react-dom/client';
+        import {
+            motion,
+            useScroll,
+            useTransform,
+            useMotionValueEvent,
+            AnimatePresence,
+            useInView
+        } from 'framer-motion';
+
+        // ============================================================
+        //  CONSTANTS
+        // ============================================================
+        // 👇 USE YOUR LOCAL VIDEO FILE – place "ahmad.mp4" in the same folder
+        const VIDEO_URL = 'ahmad.mp4';
+
+        const SCENE_COUNT = 5;
+        const SCROLL_MULTIPLIER = 100; // vh per scene
+
+        // ============================================================
+        //  HOOK: useScrollProgress
+        // ============================================================
+        function useScrollProgress() {
+            const [progress, setProgress] = useState(0);
+            useEffect(() => {
+                const handleScroll = () => {
+                    const doc = document.documentElement;
+                    const scrollTop = window.scrollY;
+                    const maxScroll = doc.scrollHeight - window.innerHeight;
+                    const p = maxScroll > 0 ? Math.min(scrollTop / maxScroll, 1) : 0;
+                    setProgress(p);
+                    // update HUD progress
+                    const el = document.getElementById('hud-progress');
+                    if (el) el.textContent = `${Math.round(p * 100)}%`.padStart(3, '0');
+                    // update top progress bar
+                    const bar = document.getElementById('scroll-progress-bar');
+                    if (bar) bar.style.width = `${p * 100}%`;
+                };
+                window.addEventListener('scroll', handleScroll, { passive: true });
+                handleScroll();
+                return () => window.removeEventListener('scroll', handleScroll);
+            }, []);
+            return progress;
+        }
+
+        // ============================================================
+        //  COMPONENT: Scene
+        // ============================================================
+        function Scene({
+            index,
+            children,
+            className = '',
+            style = {}
+        }) {
+            const ref = useRef(null);
+            const progress = useScrollProgress();
+
+            // Each scene occupies 1/SCENE_COUNT of total scroll
+            const start = index / SCENE_COUNT;
+            const end = (index + 1) / SCENE_COUNT;
+            const mid = (start + end) / 2;
+
+            // Opacity: fade in at start, peak at mid, fade out at end
+            const opacity = useMemo(() => {
+                const p = progress;
+                if (p < start) return 0;
+                if (p < start + 0.08) return (p - start) / 0.08;
+                if (p < end - 0.08) return 1;
+                if (p < end) return 1 - (p - (end - 0.08)) / 0.08;
+                return 0;
+            }, [progress, start, end]);
+
+            // Y offset: subtle parallax
+            const y = useMemo(() => {
+                const p = progress;
+                if (p < start) return 30;
+                if (p < mid) return 30 - ((p - start) / (mid - start)) * 30;
+                if (p < end) return 0 - ((p - mid) / (end - mid)) * 20;
+                return -20;
+            }, [progress, start, mid, end]);
+
+            // Scale: subtle zoom
+            const scale = useMemo(() => {
+                const p = progress;
+                if (p < start) return 0.96;
+                if (p < mid) return 0.96 + ((p - start) / (mid - start)) * 0.04;
+                if (p < end) return 1 - ((p - mid) / (end - mid)) * 0.02;
+                return 0.98;
+            }, [progress, start, mid, end]);
+
+            return ( <
+                motion.div ref = { ref }
+                className = { `scene scene-${index} ${className}` }
+                style = {
+                    {
+                        ...style,
+                        opacity,
+                        y: y * 0.5,
+                        scale,
+                        position: 'sticky',
+                        top: 0,
+                        height: '100vh',
+                        width: '100vw',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        pointerEvents: opacity > 0.5 ? 'auto' : 'none',
+                        zIndex: 10 + index,
+                        willChange: 'transform, opacity',
+                    }
+                } >
+                { children } <
+                /motion.div>
+            );
+        }
+
+        // ============================================================
+        //  COMPONENT: ScrollCue (React controlled)
+        // ============================================================
+        function ScrollCue({ progress }) {
+            const [hidden, setHidden] = useState(false);
+            useEffect(() => {
+                setHidden(progress > 0.04);
+            }, [progress]);
+            return ( <
+                div id = "scroll-cue"
+                className = { hidden ? 'hidden' : '' } >
+                <
+                span > scroll to explore < /span> <
+                div className = "scroll-cue-line" > < /div> <
+                /div>
+            );
+        }
+
+        // ============================================================
+        //  COMPONENT: HUD (React controlled)
+        // ============================================================
+        function HUD({ progress }) {
+            const [visible, setVisible] = useState(false);
+            useEffect(() => {
+                setVisible(progress > 0.015);
+            }, [progress]);
+            useEffect(() => {
+                const el = document.getElementById('hud-overlay');
+                if (el) {
+                    el.classList.toggle('visible', visible);
+                }
+            }, [visible]);
+            return null;
+        }
+
+        // ============================================================
+        //  COMPONENT: Navbar
+        // ============================================================
+        function Navbar({ progress }) {
+            const [visible, setVisible] = useState(false);
+            const [scrolled, setScrolled] = useState(false);
+
+            useEffect(() => {
+                setVisible(progress > 0.02);
+            }, [progress]);
+
+            useEffect(() => {
+                const handleScroll = () => {
+                    setScrolled(window.scrollY > 40);
+                };
+                window.addEventListener('scroll', handleScroll, { passive: true });
+                return () => window.removeEventListener('scroll', handleScroll);
+            }, []);
+
+            const navItems = [
+                { label: 'Home', href: '#scene-0' },
+                { label: 'Features', href: '#scene-1' },
+                { label: 'Stats', href: '#scene-2' },
+                { label: 'Process', href: '#scene-3' },
+            ];
+
+            const scrollToScene = (index) => {
+                const target = index / SCENE_COUNT;
+                const maxScroll = document.documentElement.scrollHeight - window.innerHeight;
+                window.scrollTo({ top: target * maxScroll, behavior: 'smooth' });
+            };
+
+            return ( <
+                    motion.nav initial = { opacity: 0, y: -12 }
+                    animate = { visible ? { opacity: 1, y: 0 } : { opacity: 0, y: -12 } }
+                    transition = { { duration: 0.6, ease: 'easeOut' } }
+                    style = {
+                        {
+                            position: 'fixed',
+                            top: 0,
+                            left: 0,
+                            right: 0,
+                            zIndex: 100,
+                            padding: '16px 32px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            background: scrolled ?
+                                'rgba(5,7,10,0.72)' :
+                                'transparent',
+                            backdropFilter: scrolled ? 'blur(16px)' : 'none',
+                            borderBottom: scrolled ?
+                                '1px solid rgba(0,240,255,0.06)' :
+                                'none',
+                            transition: 'background 0.3s, backdrop-filter 0.3s, border-color 0.3s',
+                            pointerEvents: visible ? 'auto' : 'none',
+                        }
+                    } >
+                    <
+                    div className = "font-heading"
+                    style = {
+                        { fontSize: '16px', fontWeight: 700, letterSpacing: '0.15em', color: '#eef2f6' } } >
+                    NFC < span style = { { color: '#00f0ff' } } > // < /span>JO <
+                    /div>
+
+                    <
+                    div style = {
+                        { display: 'flex', alignItems: 'center', gap: '28px' } } >
+                    {
+                        navItems.map((item, i) => ( <
+                            button key = { i }
+                            onClick = {
+                                () => scrollToScene(i) }
+                            style = {
+                                {
+                                    fontFamily: "'Inter', sans-serif",
+                                    fontSize: '11px',
+                                    fontWeight: 500,
+                                    letterSpacing: '0.08em',
+                                    textTransform: 'uppercase',
+                                    color: 'rgba(238,242,246,0.5)',
+                                    background: 'none',
+                                    border: 'none',
+                                    cursor: 'pointer',
+                                    padding: '6px 0',
+                                    transition: 'color 0.2s',
+                                    position: 'relative',
+                                }
+                            }
+                            onMouseEnter = { (e) => e.currentTarget.style.color = '#00f0ff' }
+                            onMouseLeave = { (e) => e.currentTarget.style.color = 'rgba(238,242,246,0.5)' } >
+                            { item.label } <
+                            span style = {
+                                {
+                                    position: 'absolute',
+                                    bottom: -2,
+                                    left: 0,
+                                    width: '100%',
+                                    height: '1.5px',
+                                    background: 'linear-gradient(90deg, #00f0ff, #7b2ffc)',
+                                    transform: 'scaleX(0)',
+                                    transition: 'transform 0.3s',
+                                }
+                            }
+                            onMouseEnter = { (e) => e.currentTarget.style.transform = 'scaleX(1)' }
+                            onMouseLeave = { (e) => e.currentTarget.style.transform = 'scaleX(0)' }
+                            /> <
+                            /button>
+                        ))
+                    } <
+                    button onClick = {
+                        () => scrollToScene(SCENE_COUNT - 1) }
+                    style = {
+                        {
+                            fontFamily: "'Inter', sans-serif",
+                            fontSize: '11px',
+                            fontWeight: 600,
+                            letterSpacing: '0.08em',
+                            textTransform: 'uppercase',
+                            padding: '8px 20px',
+                            borderRadius: '100px',
+                            border: '1px solid rgba(0,240,255,0.2)',
+                            background: 'rgba(0,240,255,0.06)',
+                            color: '#eef2f6',
+                            cursor: 'pointer',
+                            transition: 'all 0.25s',
+                            backdropFilter: 'blur(4px)',
+                        }
+                    }
+                    onMouseEnter = {
+                        (e) => {
+                            e.currentTarget.style.borderColor = '#00f0ff';
+                            e.currentTarget.style.background = 'rgba(0,240,255,0.12)';
+                            e.currentTarget.style.boxShadow = '0 0 24px rgba(0,240,255,0.08)';
+                        }
+                    }
+                    onMouseLeave = {
+                        (e) => {
+                            e.currentTarget.style.borderColor = 'rgba(0,240,255,0.2)';
+                            e.currentTarget.style.background = 'rgba(0,240,255,0.06)';
+                            e.currentTarget.style.boxShadow = 'none';
+                        }
+                    } >
+                    Get Card <
+                    /button> <
+                    /div> <
+                    /motion.nav>
+                );
+            }
+
+            // ============================================================
+            //  COMPONENT: Footer
+            // ============================================================
+            function Footer() {
+                return ( <
+                    div style = {
+                        {
+                            position: 'fixed',
+                            bottom: 16,
+                            right: 28,
+                            zIndex: 90,
+                            fontFamily: "'Inter', sans-serif",
+                            fontSize: '10px',
+                            fontWeight: 300,
+                            letterSpacing: '0.12em',
+                            color: 'rgba(238,242,246,0.12)',
+                            textTransform: 'uppercase',
+                            pointerEvents: 'none',
+                            userSelect: 'none',
+                        }
+                    } >
+                    Made with < span style = { { color: 'rgba(0,240,255,0.2)' } } > ◆ < /span> by NFC JO <
+                    /div>
+                );
+            }
+
+            // ============================================================
+            //  COMPONENT: App
+            // ============================================================
+            function App() {
+                const progress = useScrollProgress();
+                const containerRef = useRef(null);
+
+                // Video zoom tied to scroll
+                const videoScale = useMemo(() => {
+                    return 1 + progress * 0.04;
+                }, [progress]);
+
+                // Hide loader
+                useEffect(() => {
+                    const loader = document.getElementById('app-loader');
+                    if (loader) {
+                        setTimeout(() => loader.classList.add('hidden'), 600);
+                    }
+                }, []);
+
+                return ( <
+                        >
+                        { /* ===== VIDEO BACKGROUND ===== */ } <
+                        div style = {
+                            {
+                                position: 'fixed',
+                                top: 0,
+                                left: 0,
+                                width: '100vw',
+                                height: '100vh',
+                                zIndex: 1,
+                                overflow: 'hidden',
+                                background: '#05070a',
+                            }
+                        } >
+                        <
+                        video autoPlay loop muted playsInline
+                        style = {
+                            {
+                                width: '100%',
+                                height: '100%',
+                                objectFit: 'cover',
+                                transform: `scale(${videoScale})`,
+                                transition: 'transform 0.1s ease-out',
+                                willChange: 'transform',
+                            }
+                        }
+                        poster = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100' height='100'%3E%3Crect fill='%2305070a' width='100' height='100'/%3E%3C/svg%3E" >
+                        <
+                        source src = { VIDEO_URL }
+                        type = "video/mp4" / >
+                        <
+                        /video> { /* fallback */ } <
+                        div className = "video-fallback" >
+                        <
+                        div className = "dot-grid" > < /div> <
+                        /div> <
+                        /div>
+
+                        { /* ===== SCROLL CONTAINER ===== */ } <
+                        div ref = { containerRef }
+                        style = {
+                            {
+                                position: 'relative',
+                                zIndex: 10,
+                                height: `${SCENE_COUNT * 100}vh`,
+                                pointerEvents: 'none',
+                            }
+                        } >
+                        { /* Scene 0: Hero */ } <
+                        Scene index = { 0 } >
+                        <
+                        div style = {
+                            {
+                                textAlign: 'center',
+                                maxWidth: '820px',
+                                padding: '0 24px',
+                                pointerEvents: 'auto',
+                            }
+                        } >
+                        <
+                        motion.div initial = { { opacity: 0, y: 20 } }
+                        animate = { { opacity: 1, y: 0 } }
+                        transition = { { duration: 0.8, delay: 0.2 } }
+                        style = { { display: 'flex', flexDirection: 'column', alignItems: 'center' } } >
+                        <
+                        h1 className = "font-heading"
+                        style = {
+                            {
+                                fontSize: 'clamp(48px, 10vw, 100px)',
+                                fontWeight: 900,
+                                letterSpacing: '0.04em',
+                                lineHeight: 1.05,
+                                background: 'linear-gradient(135deg, #eef2f6 30%, #00f0ff 70%, #7b2ffc 100%)',
+                                WebkitBackgroundClip: 'text',
+                                WebkitTextFillColor: 'transparent',
+                                backgroundClip: 'text',
+                                marginBottom: '16px',
+                                textShadow: '0 0 60px rgba(0,240,255,0.08)',
+                            }
+                        } >
+                        The Future of < br /> Connected Cards
+                        <
+                        /h1> <
+                        p style = {
+                            {
+                                fontSize: 'clamp(14px, 1.4vw, 20px)',
+                                fontWeight: 300,
+                                color: 'rgba(238,242,246,0.55)',
+                                maxWidth: '520px',
+                                margin: '0 auto 32px',
+                                letterSpacing: '0.02em',
+                                lineHeight: 1.6,
+                            }
+                        } >
+                        One tap. Infinite possibilities. < br / >
+                        Experience the next generation of smart NFC technology.
+                        <
+                        /p> <
+                        button onClick = {
+                            () => {
+                                const target = 1 / SCENE_COUNT;
+                                const maxScroll = document.documentElement.scrollHeight - window
+                                .innerHeight;
+                                window.scrollTo({ top: target * maxScroll, behavior: 'smooth' });
+                            }
+                        }
+                        style = {
+                            {
+                                fontFamily: "'Inter', sans-serif",
+                                fontSize: 'clamp(13px, 1vw, 15px)',
+                                fontWeight: 600,
+                                letterSpacing: '0.06em',
+                                textTransform: 'uppercase',
+                                padding: '14px 44px',
+                                borderRadius: '100px',
+                                border: 'none',
+                                background: 'linear-gradient(135deg, #00f0ff, #7b2ffc)',
+                                color: '#05070a',
+                                cursor: 'pointer',
+                                transition: 'all 0.3s',
+                                boxShadow: '0 0 40px rgba(0,240,255,0.15)',
+                                position: 'relative',
+                                overflow: 'hidden',
+                            }
+                        }
+                        onMouseEnter = {
+                            (e) => {
+                                e.currentTarget.style.boxShadow = '0 0 60px rgba(0,240,255,0.25), inset 0 0 20px rgba(255,255,255,0.1)';
+                                e.currentTarget.style.transform = 'scale(1.03)';
+                            }
+                        }
+                        onMouseLeave = {
+                            (e) => {
+                                e.currentTarget.style.boxShadow = '0 0 40px rgba(0,240,255,0.15)';
+                                e.currentTarget.style.transform = 'scale(1)';
+                            }
+                        } >
+                        Explore the Future <
+                        /button> <
+                        /motion.div> <
+                        /div> <
+                        /Scene>
+
+                        { /* Scene 1: Features */ } <
+                        Scene index = { 1 }
+                        className = "scene-features" >
+                        <
+                        div style = {
+                            {
+                                maxWidth: '960px',
+                                width: '100%',
+                                padding: '0 32px',
+                                pointerEvents: 'auto',
+                            }
+                        } >
+                        <
+                        div style = { { textAlign: 'center', marginBottom: '40px' } } >
+                        <
+                        span className = "font-heading"
+                        style = {
+                            {
+                                fontSize: '10px',
+                                letterSpacing: '0.25em',
+                                textTransform: 'uppercase',
+                                color: 'rgba(0,240,255,0.3)',
+                            }
+                        } >
+                        Features
+                        <
+                        /span> <
+                        h2 className = "font-heading"
+                        style = {
+                            {
+                                fontSize: 'clamp(28px, 3.6vw, 44px)',
+                                fontWeight: 700,
+                                letterSpacing: '0.02em',
+                                color: '#eef2f6',
+                                marginTop: '6px',
+                            }
+                        } >
+                        Engineered for < span style = { { color: '#00f0ff' } } > speed < /span> & <
+                        span style = { { color: '#7b2ffc' } } > trust < /span> <
+                        /h2> <
+                        /div> <
+                        div style = {
+                            {
+                                display: 'grid',
+                                gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+                                gap: '32px',
+                                width: '100%',
+                            }
+                        } > {
+                            [
+                                { icon: '⚡', title: 'Instant Tap', desc: 'Sub‑millisecond response, zero latency.' },
+                                { icon: '🔒', title: 'Secure Chip', desc: 'Bank‑grade encryption, always protected.' },
+                                { icon: '🎨', title: 'Custom Design', desc: 'Your brand, your way — fully bespoke.' },
+                            ].map((item, i) => ( <
+                                motion.div key = { i }
+                                initial = { { opacity: 0, y: 20 } }
+                                animate = { { opacity: 1, y: 0 } }
+                                transition = { { duration: 0.5, delay: i * 0.1 } }
+                                style = {
+                                    {
+                                        textAlign: 'center',
+                                        padding: '24px 16px',
+                                        borderRadius: '8px',
+                                        border: '1px solid rgba(0,240,255,0.06)',
+                                        background: 'rgba(5,7,10,0.35)',
+                                        backdropFilter: 'blur(8px)',
+                                        transition: 'border-color 0.3s, box-shadow 0.3s',
+                                    }
+                                }
+                                onMouseEnter = {
+                                    (e) => {
+                                        e.currentTarget.style.borderColor = 'rgba(0,240,255,0.15)';
+                                        e.currentTarget.style.boxShadow = '0 0 30px rgba(0,240,255,0.03)';
+                                    }
+                                }
+                                onMouseLeave = {
+                                    (e) => {
+                                        e.currentTarget.style.borderColor = 'rgba(0,240,255,0.06)';
+                                        e.currentTarget.style.boxShadow = 'none';
+                                    }
+                                } >
+                                <
+                                div style = {
+                                    {
+                                        fontSize: '32px',
+                                        marginBottom: '10px',
+                                        display: 'block',
+                                    }
+                                } > { item.icon } < /div> <
+                                h3 className = "font-heading"
+                                style = {
+                                    {
+                                        fontSize: '16px',
+                                        fontWeight: 600,
+                                        letterSpacing: '0.04em',
+                                        color: '#eef2f6',
+                                        marginBottom: '6px',
+                                    }
+                                } > { item.title } < /h3> <
+                                p style = {
+                                    {
+                                        fontSize: '13px',
+                                        fontWeight: 300,
+                                        color: 'rgba(238,242,246,0.4)',
+                                        lineHeight: 1.5,
+                                    }
+                                } > { item.desc } < /p> <
+                                /motion.div>
+                            ))
+                        } <
+                        /div> <
+                        /div> <
+                        /Scene>
+
+                        { /* Scene 2: Stats */ } <
+                        Scene index = { 2 }
+                        className = "scene-stats" >
+                        <
+                        div style = {
+                            {
+                                maxWidth: '880px',
+                                width: '100%',
+                                padding: '0 32px',
+                                pointerEvents: 'auto',
+                            }
+                        } >
+                        <
+                        div style = { { textAlign: 'center', marginBottom: '32px' } } >
+                        <
+                        span className = "font-heading"
+                        style = {
+                            {
+                                fontSize: '10px',
+                                letterSpacing: '0.25em',
+                                textTransform: 'uppercase',
+                                color: 'rgba(0,240,255,0.3)',
+                            }
+                        } >
+                        By the numbers
+                        <
+                        /span> <
+                        /div> <
+                        div style = {
+                            {
+                                display: 'grid',
+                                gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))',
+                                gap: '24px',
+                                width: '100%',
+                            }
+                        } > {
+                            [
+                                { value: '10K+', label: 'Cards Shipped', accent: '#00f0ff' },
+                                { value: '99.9%', label: 'Uptime', accent: '#7b2ffc' },
+                                { value: '5ms', label: 'Avg. Response', accent: '#00f0ff' },
+                                { value: '4.9★', label: 'User Rating', accent: '#7b2ffc' },
+                            ].map((stat, i) => ( <
+                                motion.div key = { i }
+                                initial = { { opacity: 0, scale: 0.92 } }
+                                animate = { { opacity: 1, scale: 1 } }
+                                transition = { { duration: 0.5, delay: i * 0.08 } }
+                                style = {
+                                    {
+                                        textAlign: 'center',
+                                        padding: '24px 12px',
+                                        border: '1px solid rgba(0,240,255,0.05)',
+                                        borderRadius: '6px',
+                                        background: 'rgba(5,7,10,0.25)',
+                                        backdropFilter: 'blur(4px)',
+                                    }
+                                } >
+                                <
+                                div className = "font-heading"
+                                style = {
+                                    {
+                                        fontSize: 'clamp(32px, 4vw, 48px)',
+                                        fontWeight: 800,
+                                        color: stat.accent,
+                                        letterSpacing: '0.02em',
+                                        lineHeight: 1.1,
+                                        textShadow: `0 0 40px ${stat.accent}15`,
+                                    }
+                                } > { stat.value } < /div> <
+                                div style = {
+                                    {
+                                        fontSize: '12px',
+                                        fontWeight: 400,
+                                        color: 'rgba(238,242,246,0.3)',
+                                        letterSpacing: '0.06em',
+                                        textTransform: 'uppercase',
+                                        marginTop: '4px',
+                                    }
+                                } > { stat.label } < /div> <
+                                /motion.div>
+                            ))
+                        } <
+                        /div> <
+                        /div> <
+                        /Scene>
+
+                        { /* Scene 3: How it works */ } <
+                        Scene index = { 3 }
+                        className = "scene-process" >
+                        <
+                        div style = {
+                            {
+                                maxWidth: '720px',
+                                width: '100%',
+                                padding: '0 32px',
+                                pointerEvents: 'auto',
+                            }
+                        } >
+                        <
+                        div style = { { textAlign: 'center', marginBottom: '36px' } } >
+                        <
+                        span className = "font-heading"
+                        style = {
+                            {
+                                fontSize: '10px',
+                                letterSpacing: '0.25em',
+                                textTransform: 'uppercase',
+                                color: 'rgba(0,240,255,0.3)',
+                            }
+                        } >
+                        How it works
+                        <
+                        /span> <
+                        h2 className = "font-heading"
+                        style = {
+                            {
+                                fontSize: 'clamp(26px, 3.2vw, 40px)',
+                                fontWeight: 700,
+                                letterSpacing: '0.02em',
+                                color: '#eef2f6',
+                                marginTop: '4px',
+                            }
+                        } >
+                        Get your card in < span style = { { color: '#00f0ff' } } > three < /span> steps <
+                        /h2> <
+                        /div> <
+                        div style = {
+                            {
+                                display: 'flex',
+                                flexDirection: 'column',
+                                gap: '16px',
+                                width: '100%',
+                                position: 'relative',
+                            }
+                        } >
+                        { /* timeline line */ } <
+                        div style = {
+                            {
+                                position: 'absolute',
+                                left: '18px',
+                                top: '36px',
+                                bottom: '36px',
+                                width: '1px',
+                                background: 'linear-gradient(180deg, rgba(0,240,255,0.15), rgba(123,47,252,0.15))',
+                            }
+                        } > < /div> {
+                            [
+                                { step: '01', title: 'Order', desc: 'Pick your design and place your order online.' },
+                                { step: '02', title: 'Configure', desc: 'We program your NFC chip with your data.' },
+                                { step: '03', title: 'Tap & Go', desc: 'Receive your card and tap to connect instantly.' },
+                            ].map((item, i) => ( <
+                                motion.div key = { i }
+                                initial = { { opacity: 0, x: -12 } }
+                                animate = { { opacity: 1, x: 0 } }
+                                transition = { { duration: 0.4, delay: i * 0.1 } }
+                                style = {
+                                    {
+                                        display: 'flex',
+                                        alignItems: 'flex-start',
+                                        gap: '18px',
+                                        padding: '16px 20px',
+                                        borderRadius: '8px',
+                                        border: '1px solid rgba(0,240,255,0.04)',
+                                        background: 'rgba(5,7,10,0.2)',
+                                        backdropFilter: 'blur(4px)',
+                                        transition: 'border-color 0.3s',
+                                    }
+                                }
+                                onMouseEnter = {
+                                    (e) => {
+                                        e.currentTarget.style.borderColor = 'rgba(0,240,255,0.1)';
+                                    }
+                                }
+                                onMouseLeave = {
+                                    (e) => {
+                                        e.currentTarget.style.borderColor = 'rgba(0,240,255,0.04)';
+                                    }
+                                } >
+                                <
+                                div className = "font-heading"
+                                style = {
+                                    {
+                                        fontSize: '14px',
+                                        fontWeight: 700,
+                                        color: '#00f0ff',
+                                        minWidth: '36px',
+                                        opacity: 0.4,
+                                        letterSpacing: '0.04em',
+                                    }
+                                } > { item.step } < /div> <
+                                div >
+                                <
+                                h4 style = {
+                                    {
+                                        fontSize: '16px',
+                                        fontWeight: 500,
+                                        color: '#eef2f6',
+                                        letterSpacing: '0.02em',
+                                        marginBottom: '2px',
+                                    }
+                                } > { item.title } < /h4> <
+                                p style = {
+                                    {
+                                        fontSize: '13px',
+                                        fontWeight: 300,
+                                        color: 'rgba(238,242,246,0.35)',
+                                        lineHeight: 1.5,
+                                    }
+                                } > { item.desc } < /p> <
+                                /div> <
+                                /motion.div>
+                            ))
+                        } <
+                        /div> <
+                        /div> <
+                        /Scene>
+
+                        { /* Scene 4: Final CTA */ } <
+                        Scene index = { 4 }
+                        className = "scene-cta" >
+                        <
+                        div style = {
+                            {
+                                textAlign: 'center',
+                                maxWidth: '640px',
+                                padding: '0 24px',
+                                pointerEvents: 'auto',
+                            }
+                        } >
+                        <
+                        motion.div initial = { { opacity: 0, y: 20 } }
+                        animate = { { opacity: 1, y: 0 } }
+                        transition = { { duration: 0.6 } } >
+                        <
+                        h2 className = "font-heading"
+                        style = {
+                            {
+                                fontSize: 'clamp(36px, 6vw, 64px)',
+                                fontWeight: 800,
+                                letterSpacing: '0.02em',
+                                lineHeight: 1.08,
+                                background: 'linear-gradient(135deg, #eef2f6 20%, #00f0ff 70%, #7b2ffc 100%)',
+                                WebkitBackgroundClip: 'text',
+                                WebkitTextFillColor: 'transparent',
+                                backgroundClip: 'text',
+                                marginBottom: '12px',
+                            }
+                        } >
+                        Ready to Connect?
+                        <
+                        /h2> <
+                        p style = {
+                            {
+                                fontSize: 'clamp(15px, 1.2vw, 18px)',
+                                fontWeight: 300,
+                                color: 'rgba(238,242,246,0.4)',
+                                maxWidth: '440px',
+                                margin: '0 auto 32px',
+                                lineHeight: 1.6,
+                            }
+                        } >
+                        Join thousands already using NFC JO. < br / >
+                        Your connected future starts with one tap.
+                        <
+                        /p> <
+                        button onClick = {
+                            () => {
+                                alert('🚀 Thank you for your interest! Your NFC JO card awaits.');
+                            }
+                        }
+                        style = {
+                            {
+                                fontFamily: "'Inter', sans-serif",
+                                fontSize: 'clamp(14px, 1vw, 16px)',
+                                fontWeight: 600,
+                                letterSpacing: '0.06em',
+                                textTransform: 'uppercase',
+                                padding: '16px 52px',
+                                borderRadius: '100px',
+                                border: 'none',
+                                background: 'linear-gradient(135deg, #00f0ff, #7b2ffc)',
+                                color: '#05070a',
+                                cursor: 'pointer',
+                                transition: 'all 0.3s',
+                                boxShadow: '0 0 50px rgba(0,240,255,0.12)',
+                                position: 'relative',
+                                overflow: 'hidden',
+                            }
+                        }
+                        onMouseEnter = {
+                            (e) => {
+                                e.currentTarget.style.boxShadow = '0 0 80px rgba(0,240,255,0.25), inset 0 0 30px rgba(255,255,255,0.08)';
+                                e.currentTarget.style.transform = 'scale(1.04)';
+                            }
+                        }
+                        onMouseLeave = {
+                            (e) => {
+                                e.currentTarget.style.boxShadow = '0 0 50px rgba(0,240,255,0.12)';
+                                e.currentTarget.style.transform = 'scale(1)';
+                            }
+                        } >
+                        Get Your Card Now <
+                        /button> <
+                        /motion.div> <
+                        /div> <
+                        /Scene> <
+                        /div>
+
+                        { /* ===== FIXED ELEMENTS ===== */ } <
+                        ScrollCue progress = { progress }
+                        /> <
+                        HUD progress = { progress }
+                        /> <
+                        Navbar progress = { progress }
+                        /> <
+                        Footer / >
+
+                        { /* ===== SCROLL INDICATOR DOTS ===== */ } <
+                        div style = {
+                            {
+                                position: 'fixed',
+                                right: '20px',
+                                top: '50%',
+                                transform: 'translateY(-50%)',
+                                zIndex: 80,
+                                display: 'flex',
+                                flexDirection: 'column',
+                                gap: '8px',
+                                pointerEvents: 'none',
+                                opacity: progress > 0.02 ? 0.6 : 0,
+                                transition: 'opacity 0.6s',
+                            }
+                        } > {
+                            Array.from({ length: SCENE_COUNT }).map((_, i) => {
+                                const active = progress >= i / SCENE_COUNT && progress < (i + 1) /
+                                SCENE_COUNT;
+                                return ( <
+                                    div key = { i }
+                                    style = {
+                                        {
+                                            width: '6px',
+                                            height: '6px',
+                                            borderRadius: '50%',
+                                            background: active ? '#00f0ff' :
+                                                'rgba(238,242,246,0.12)',
+                                            boxShadow: active ? '0 0 12px rgba(0,240,255,0.2)' :
+                                                'none',
+                                            transition: 'all 0.3s',
+                                        }
+                                    }
+                                    />
+                                );
+                            })
+                        } <
+                        /div> <
+                        / >
+                    );
+                }
+
+                // ============================================================
+                //  RENDER
+                // ============================================================
+                const root = createRoot(document.getElementById('root'));
+                root.render( < App / > );
+
+                // ============================================================
+                //  POST-LOAD: update scene IDs for nav
+                // ============================================================
+                setTimeout(() => {
+                    document.querySelectorAll('.scene').forEach((el, i) => {
+                        el.id = `scene-${i}`;
+                    });
+                }, 100);
+            </script>
+        </body>
+        </html>
