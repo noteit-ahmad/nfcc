@@ -769,6 +769,7 @@
             function App() {
                 const progress = useScrollProgress();
                 const containerRef = useRef(null);
+                const videoRef = useRef(null);
 
                 // Video zoom tied to scroll
                 const videoScale = useMemo(() => {
@@ -781,6 +782,32 @@
                     if (loader) {
                         setTimeout(() => loader.classList.add('hidden'), 600);
                     }
+                }, []);
+
+                // --- Autoplay fix ---
+                useEffect(() => {
+                    const video = videoRef.current;
+                    if (!video) return;
+
+                    const attemptPlay = () => {
+                        const promise = video.play();
+                        if (promise !== undefined) {
+                            promise.catch(() => {
+                                // Autoplay blocked – wait for user interaction
+                                const handler = () => {
+                                    video.play().catch(() => {});
+                                    document.removeEventListener('click', handler);
+                                };
+                                document.addEventListener('click', handler);
+                                // Also try on touch for mobile
+                                document.addEventListener('touchstart', handler, { once: true });
+                            });
+                        }
+                    };
+
+                    // Small delay to ensure the video element is ready
+                    const timeout = setTimeout(attemptPlay, 300);
+                    return () => clearTimeout(timeout);
                 }, []);
 
                 return ( <
@@ -799,7 +826,8 @@
                             }
                         } >
                         <
-                        video autoPlay loop muted playsInline
+                        video ref = { videoRef }
+                        autoPlay loop muted playsInline
                         style = {
                             {
                                 width: '100%',
